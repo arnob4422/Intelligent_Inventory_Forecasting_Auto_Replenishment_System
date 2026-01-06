@@ -67,12 +67,14 @@ LABEL_MAPPINGS = {
     "bowl": "Produce Container",
     "cup": "Coffee Cup",
     "tv": "Packaged Goods",
-    "book": "Packaged Food",
+    "book": "Seafood Package", # Overriding for fish market context (was Packaged Food)
     "suitcase": "Packaged Goods",
     "handbag": "Dairy Carton",
     "backpack": "Packaged Inventory",
     "chair": "Stool",
     "potted plant": "Store Item",
+    "cell phone": "Price Tag", # Market context for small labels (V14)
+    "bed": "Fresh Fish",       # Market context (V14)
 }
 
 # 🚫 Hallucination Blacklist (Strict for retail)
@@ -141,7 +143,8 @@ def run_detection_on_frame(image_raw, is_video=False):
     # 🛡️ PRIORITY 1: Custom Retail Brands
     for cc in custom_candidates:
         noise_brands = ["amour", "chocapic", "selecto", "wafa", "dziriya"]
-        min_brand_conf = 0.35 if cc["class_name"] in noise_brands else 0.15
+        # 🏎️ Optimized for Video: lowering floor to 0.05 to catch names during playback (V14)
+        min_brand_conf = 0.35 if cc["class_name"] in noise_brands else 0.05 
         if cc["conf"] > min_brand_conf:
             product_name = cc["class_name"].title()
             # Explicit brand overrides for matching robustness
@@ -153,16 +156,21 @@ def run_detection_on_frame(image_raw, is_video=False):
             
             final_boxes.append({"bbox": cc["bbox"], "conf": cc["conf"], "name": product_name, "type": "custom"})
 
-    # 🛡️ PRIORITY 2: Produce
+    # 🛡️ PRIORITY 2: Produce & Market Items
     for nc in nano_candidates:
         should_skip = False
         for b in final_boxes:
-            if b["type"] == "custom" and calculate_iou(nc["bbox"], b["bbox"]) > 0.4:
-                if b["conf"] > nc["conf"]:
-                    should_skip = True
-                    break
-        if not should_skip and nc["is_produce"]:
-            if any(calculate_iou(nc["bbox"], b["bbox"]) > 0.65 for b in final_boxes if b["type"] == "nano"): continue
+            # Custom brands ALWAYS win over generic nano detections
+            if b["type"] == "custom" and calculate_iou(nc["bbox"], b["bbox"]) > 0.3:
+                should_skip = True
+                break
+        
+        if not should_skip:
+            # Deduplicate against existing nano detections for produce/market items
+            if nc["is_produce"] or nc["class_name"] in ["bed", "cell phone"]: # "bed" for fresh fish, "cell phone" for price tags
+                if any(calculate_iou(nc["bbox"], b["bbox"]) > 0.65 for b in final_boxes if b["type"] == "nano"):
+                    continue
+            
             product_name = LABEL_MAPPINGS.get(nc["class_name"], nc["class_name"].title())
             final_boxes.append({"bbox": nc["bbox"], "conf": nc["conf"], "name": product_name, "type": "nano"})
 
