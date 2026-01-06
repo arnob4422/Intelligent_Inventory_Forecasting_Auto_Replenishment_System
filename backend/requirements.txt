@@ -13,3 +13,9 @@ python-jose[cryptography]==3.3.0
 python-dotenv==1.0.0
 pytest==7.4.4
 httpx==0.26.0
+torch==2.5.1
+torchvision==0.20.1
+Pillow
+email-validator
+ultralytics>=8.0.0
+opencv-python>=4.8.0

@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+env/
+.env
+
+# Node
+node_modules/
+dist/
+.DS_Store
+
+# Models & Data (Optional, but keeping for "full project")
+# *.pt
+# *.db
+
+# IDEs
+.vscode/
+.idea/

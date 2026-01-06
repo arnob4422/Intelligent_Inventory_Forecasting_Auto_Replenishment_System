@@ -9,27 +9,40 @@ import models
 from auth import initialize_firebase
 
 # Import routes
-from routes import products, inventory, forecast, anomalies, recommendations, simulations, sales, locations
+from routes import (
+    products,
+    inventory,
+    forecast,
+    anomalies,
+    recommendations,
+    simulations,
+    sales,
+    locations,
+    cameras,
+    footages,
+    camera # [NEW]
+)
+from ensure_inventory import ensure_all_products_have_inventory
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
     # Startup
-    print("🚀 Starting Intelligent Inventory Forecasting System...")
+    print("Starting Intelligent Inventory Forecasting System...")
     
     # Initialize Firebase
     initialize_firebase()
     
     # Create database tables
-    print("📊 Creating database tables...")
+    print("Creating database tables...")
     Base.metadata.create_all(bind=engine)
-    print("✅ Database initialized")
+    print("Database initialized")
     
     yield
     
     # Shutdown
-    print("👋 Shutting down...")
+    print("Shutting down...")
 
 
 # Create FastAPI app
@@ -43,11 +56,18 @@ app = FastAPI(
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://localhost:3000", "*"],  # Frontend URLs
+    allow_origins=["http://localhost:5173", "http://localhost:3000"], 
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Mount static files
+from fastapi.staticfiles import StaticFiles
+import os
+if not os.path.exists("static"):
+    os.makedirs("static")
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # Include routers
 app.include_router(products.router)
@@ -58,6 +78,9 @@ app.include_router(recommendations.router)
 app.include_router(simulations.router)
 app.include_router(sales.router)
 app.include_router(locations.router)
+app.include_router(cameras.router)
+app.include_router(footages.router)
+app.include_router(camera.router) # [NEW]
 
 
 @app.get("/")
@@ -88,11 +111,16 @@ def get_stats():
     from datetime import datetime, timedelta
     from sqlalchemy import func
     
+    # Nudge: Stats logic updated to strictly count products appearing in Inventory
     db = SessionLocal()
     try:
         # Base counts
+        # Only count products that have associated inventory records to match management list
+        # Using a join ensures we only count products that actually exist in the inventory table
+        inventory_product_count = db.query(models.Product).join(models.Inventory).distinct().count()
+        
         counts = {
-            "products": db.query(models.Product).count(),
+            "products": inventory_product_count,
             "locations": db.query(models.Location).count(),
             "sales_records": db.query(models.SalesData).count(),
             "forecasts": db.query(models.Forecast).count(),

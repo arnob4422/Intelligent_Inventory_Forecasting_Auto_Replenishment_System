@@ -1,10 +1,12 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { auth } from '../firebase';
+import { auth, isMockAuth } from '../firebase';
 import {
     signInWithEmailAndPassword,
     createUserWithEmailAndPassword,
     signOut,
-    onAuthStateChanged
+    onAuthStateChanged,
+    GoogleAuthProvider,
+    signInWithPopup
 } from 'firebase/auth';
 
 const AuthContext = createContext({});
@@ -17,22 +19,28 @@ export const AuthProvider = ({ children }) => {
     const [authToken, setAuthToken] = useState(null);
 
     useEffect(() => {
+        let unsubscribe;
         const checkAuth = async () => {
             // Check for persistent mock session
             const savedUser = localStorage.getItem('authUser');
             const savedToken = localStorage.getItem('authToken');
 
-            if (!auth) {
+            if (isMockAuth || !auth) {
                 if (savedUser && savedToken) {
-                    console.log('🔓 Restoring mock session:', JSON.parse(savedUser).email);
-                    setUser(JSON.parse(savedUser));
-                    setAuthToken(savedToken);
+                    try {
+                        console.log('🔓 Restoring mock session:', JSON.parse(savedUser).email);
+                        setUser(JSON.parse(savedUser));
+                        setAuthToken(savedToken);
+                    } catch (e) {
+                        localStorage.removeItem('authUser');
+                        localStorage.removeItem('authToken');
+                    }
                 }
                 setLoading(false);
                 return;
             }
 
-            const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+            unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
                 if (firebaseUser) {
                     const token = await firebaseUser.getIdToken();
                     setAuthToken(token);
@@ -51,46 +59,73 @@ export const AuthProvider = ({ children }) => {
                 }
                 setLoading(false);
             });
-
-            return unsubscribe;
         };
 
-        const unsubscribe = checkAuth();
+        checkAuth();
         return () => {
-            if (typeof unsubscribe === 'function') unsubscribe();
+            if (unsubscribe) unsubscribe();
         };
     }, []);
 
     const login = async (email, password) => {
-        if (!auth) {
-            // Development mode persistent mock login
-            console.log('🔓 Logging in via development mode persistence');
-            const mockUser = { email, uid: 'dev-user-123', role: 'admin' };
-            setUser(mockUser);
-            setAuthToken('dev-token');
-            localStorage.setItem('authToken', 'dev-token');
-            localStorage.setItem('authUser', JSON.stringify(mockUser));
-            return;
+        if (isMockAuth || !auth) {
+            return mockLogin(email);
         }
-        return signInWithEmailAndPassword(auth, email, password);
+        try {
+            return await signInWithEmailAndPassword(auth, email, password);
+        } catch (error) {
+            if (error.code === 'auth/api-key-not-valid' || error.message.includes('api-key-not-valid')) {
+                console.warn('⚠️ Invalid API Key detected. Falling back to Mock Login.');
+                return mockLogin(email);
+            }
+            throw error;
+        }
+    };
+
+    const mockLogin = (email) => {
+        console.log('🔓 Logging in via development mode');
+        const mockUser = { email, uid: 'dev-user-123', role: 'admin' };
+        setUser(mockUser);
+        setAuthToken('dev-token');
+        localStorage.setItem('authToken', 'dev-token');
+        localStorage.setItem('authUser', JSON.stringify(mockUser));
+        return Promise.resolve(mockUser);
     };
 
     const signup = async (email, password) => {
-        if (!auth) {
-            // Development mode persistent mock signup
-            console.log('🔓 Signing up via development mode persistence');
-            const mockUser = { email, uid: 'dev-user-123', role: 'admin' };
-            setUser(mockUser);
-            setAuthToken('dev-token');
-            localStorage.setItem('authToken', 'dev-token');
-            localStorage.setItem('authUser', JSON.stringify(mockUser));
-            return;
+        if (isMockAuth || !auth) {
+            return mockLogin(email);
         }
-        return createUserWithEmailAndPassword(auth, email, password);
+        try {
+            return await createUserWithEmailAndPassword(auth, email, password);
+        } catch (error) {
+            if (error.code === 'auth/api-key-not-valid' || error.message.includes('api-key-not-valid')) {
+                console.warn('⚠️ Invalid API Key detected. Falling back to Mock Login.');
+                return mockLogin(email);
+            }
+            throw error;
+        }
+    };
+
+    const googleLogin = async (email) => {
+        if (isMockAuth || !auth) {
+            return mockLogin(email || 'google-user@example.com');
+        }
+        try {
+            const provider = new GoogleAuthProvider();
+            return await signInWithPopup(auth, provider);
+        } catch (error) {
+            console.error('Google sign-in error:', error);
+            if (error.code === 'auth/api-key-not-valid' || error.message.includes('api-key-not-valid')) {
+                console.warn('⚠️ Invalid API Key. Falling back to Mock Google Login.');
+                return mockLogin('google-user@example.com');
+            }
+            throw error;
+        }
     };
 
     const logout = async () => {
-        if (!auth) {
+        if (isMockAuth || !auth) {
             setUser(null);
             setAuthToken(null);
             localStorage.removeItem('authToken');
@@ -107,6 +142,7 @@ export const AuthProvider = ({ children }) => {
         authToken,
         login,
         signup,
+        googleLogin,
         logout,
         loading
     };

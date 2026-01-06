@@ -6,7 +6,8 @@ import os
 from pathlib import Path
 
 # Add support for disabling auth for easier development
-DISABLE_AUTH = os.getenv("DISABLE_AUTH", "true").lower() == "true"
+# Set to "false" to enable auth check, but it will fallback to mock user if Firebase is not initialized
+DISABLE_AUTH = os.getenv("DISABLE_AUTH", "false").lower() == "true"
 firebase_initialized = False
 
 def initialize_firebase():
@@ -19,18 +20,31 @@ def initialize_firebase():
         cred_path = os.getenv("FIREBASE_CREDENTIALS_PATH", "./firebase-service-account.json")
         
         # Check if credentials file exists
-        if Path(cred_path).exists():
+        search_paths = [
+            cred_path,
+            "./firebase-service-account.json",
+            "./firebase-service-account-mock.json",
+            "backend/firebase-service-account-mock.json"
+        ]
+        
+        actual_path = None
+        for p in search_paths:
+            if Path(p).exists():
+                actual_path = p
+                break
+                
+        if actual_path:
             try:
-                cred = credentials.Certificate(cred_path)
+                cred = credentials.Certificate(actual_path)
                 firebase_admin.initialize_app(cred)
                 firebase_initialized = True
-                print("✅ Firebase Admin SDK initialized successfully")
+                print(f"✅ Firebase Admin SDK initialized successfully using {actual_path}")
             except Exception as e:
-                print(f"⚠️  Firebase initialization failed: {e}")
-                print("⚠️  Authentication will be disabled. Please add firebase-service-account.json")
+                print(f"Warning: Firebase initialization failed: {e}")
+                print("Authentication will use mock user for development.")
         else:
-            print(f"⚠️  Firebase credentials not found at {cred_path}")
-            print("⚠️  Authentication will be disabled. Please add firebase-service-account.json")
+            print(f"Warning: Firebase credentials not found. Tried: {', '.join(search_paths)}")
+            print("Authentication will use mock user for development.")
 
 # HTTP Bearer token scheme
 security = HTTPBearer(auto_error=False)

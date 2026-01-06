@@ -41,12 +41,31 @@ def create_product(
     # Check if SKU already exists
     existing = db.query(models.Product).filter(models.Product.sku == product.sku).first()
     if existing:
-        raise HTTPException(status_code=400, detail="Product with this SKU already exists")
+        return existing
     
-    db_product = models.Product(**product.model_dump())
+    # Exclude initial_stock and location_id from Product model fields
+    product_data = product.model_dump(exclude={'initial_stock', 'location_id'})
+    db_product = models.Product(**product_data)
     db.add(db_product)
     db.commit()
     db.refresh(db_product)
+    
+    # Auto-create inventory for all locations
+    locations = db.query(models.Location).all()
+    for location in locations:
+        stock = 0
+        if product.location_id and location.id == product.location_id:
+            stock = product.initial_stock or 0
+            
+        inventory = models.Inventory(
+            product_id=db_product.id,
+            location_id=location.id,
+            current_stock=stock,
+            reserved_stock=0
+        )
+        db.add(inventory)
+    db.commit()
+    
     return db_product
 
 @router.put("/{product_id}", response_model=schemas.ProductResponse)

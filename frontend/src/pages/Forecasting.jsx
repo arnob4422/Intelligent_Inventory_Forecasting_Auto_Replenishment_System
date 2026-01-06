@@ -37,7 +37,8 @@ const Forecasting = () => {
             setForecasts(res.data);
         } catch (error) {
             console.error('Error generating forecast:', error);
-            alert('Error generating forecast. Make sure there is sufficient sales data.');
+            const detail = error.response?.data?.detail || 'Error generating forecast. Make sure there is sufficient sales data.';
+            alert(`Error: ${detail}`);
         } finally {
             setGenerating(false);
         }

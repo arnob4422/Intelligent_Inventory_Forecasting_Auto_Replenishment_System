@@ -28,7 +28,8 @@ class ProductBase(BaseModel):
     unit_cost: float = 0.0
 
 class ProductCreate(ProductBase):
-    pass
+    initial_stock: Optional[int] = 0
+    location_id: Optional[int] = None
 
 class ProductResponse(ProductBase):
     id: int
@@ -101,6 +102,8 @@ class ForecastBase(BaseModel):
     upper_bound: Optional[float] = None
     confidence_score: Optional[float] = None
     model_version: Optional[str] = None
+    
+    model_config = {"protected_namespaces": ()}
 
 class ForecastCreate(ForecastBase):
     pass
@@ -192,3 +195,41 @@ class AnomalyDetectionRequest(BaseModel):
     location_id: Optional[int] = None
     start_date: Optional[datetime] = None
     end_date: Optional[datetime] = None
+
+# Camera Schemas
+class CameraBase(BaseModel):
+    name: str
+    location_id: Optional[int] = None
+    resolution: str = "1920x1080"
+    fps: int = 30
+    status: str = "active"
+
+class CameraCreate(CameraBase):
+    pass
+
+class CameraResponse(CameraBase):
+    id: int
+    last_active: datetime
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+# Camera Footage Schemas
+class CameraFootageBase(BaseModel):
+    camera_id: int
+    timestamp: datetime
+    duration: int
+    file_path: str
+    file_size: float
+    footage_type: str = "recorded"
+
+class CameraFootageCreate(CameraFootageBase):
+    pass
+
+class CameraFootageResponse(CameraFootageBase):
+    id: int
+    created_at: datetime
+    
+    class Config:
+        from_attributes = True

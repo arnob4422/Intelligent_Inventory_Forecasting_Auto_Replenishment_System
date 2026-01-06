@@ -140,3 +140,56 @@ class SimulationRun(Base):
     results = Column(Text)  # JSON string of results
     created_by = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class Camera(Base):
+    __tablename__ = "cameras"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String, nullable=False)
+    location_id = Column(Integer, ForeignKey("locations.id"), nullable=True)
+    resolution = Column(String, default="1920x1080")
+    fps = Column(Integer, default=30)
+    status = Column(String, default="active")  # active, inactive, maintenance
+    last_active = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    footages = relationship("CameraFootage", back_populates="camera")
+
+class CameraFootage(Base):
+    __tablename__ = "camera_footages"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    camera_id = Column(Integer, ForeignKey("cameras.id"), nullable=False)
+    timestamp = Column(DateTime, default=datetime.utcnow)
+    duration = Column(Integer)  # in seconds
+    file_path = Column(String)
+    file_size = Column(Float)  # in MB
+    footage_type = Column(String, default="recorded")  # recorded, live_snapshot
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    camera = relationship("Camera", back_populates="footages")
+
+class AILabelMapping(Base):
+    __tablename__ = "ai_label_mappings"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    ai_label = Column(String, unique=True, index=True, nullable=False) # e.g. "cup"
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    product = relationship("Product")
+
+class ProductEmbedding(Base):
+    __tablename__ = "product_embeddings"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    product_id = Column(Integer, ForeignKey("products.id"), nullable=False)
+    embedding = Column(Text, nullable=False) # JSON stringified float array
+    label = Column(String) # The original AI label
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    # Relationships
+    product = relationship("Product")

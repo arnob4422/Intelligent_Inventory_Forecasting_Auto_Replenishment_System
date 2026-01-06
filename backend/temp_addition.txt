@@ -1,0 +1,5 @@
+﻿    # Fruits & Vegetables (for produce detection)
+    "apple", "orange", "banana", "broccoli", "carrot",
+    
+    # Food Items (for packaged goods)
+    "sandwich", "hot dog", "pizza", "donut", "cake", "bowl"

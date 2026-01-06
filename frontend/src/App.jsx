@@ -8,6 +8,11 @@ import Inventory from './pages/Inventory';
 import Forecasting from './pages/Forecasting';
 import Anomalies from './pages/Anomalies';
 import Recommendations from './pages/Recommendations';
+import Stores from './pages/Stores';
+import Footages from './pages/Footages';
+import RealTimeCamera from './pages/RealTimeCamera';
+
+import MediaAnalysis from './pages/MediaAnalysis';
 
 const PrivateRoute = ({ children }) => {
     const { user } = useAuth();
@@ -33,6 +38,10 @@ function App() {
                         <Route path="forecasting" element={<Forecasting />} />
                         <Route path="anomalies" element={<Anomalies />} />
                         <Route path="recommendations" element={<Recommendations />} />
+                        <Route path="stores" element={<Stores />} />
+                        <Route path="footages" element={<Footages />} />
+                        <Route path="live-detection" element={<RealTimeCamera />} />
+                        <Route path="media-analysis" element={<MediaAnalysis />} />
                     </Route>
                 </Routes>
             </BrowserRouter>

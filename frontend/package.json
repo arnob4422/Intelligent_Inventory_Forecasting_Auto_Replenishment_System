@@ -9,14 +9,17 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tensorflow-models/coco-ssd": "^2.2.3",
+    "@tensorflow-models/mobilenet": "^2.1.1",
+    "@tensorflow/tfjs": "^4.22.0",
+    "axios": "^1.6.5",
+    "date-fns": "^3.0.6",
+    "firebase": "^10.7.1",
+    "lucide-react": "^0.303.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.21.1",
-    "firebase": "^10.7.1",
-    "axios": "^1.6.5",
-    "recharts": "^2.10.3",
-    "lucide-react": "^0.303.0",
-    "date-fns": "^3.0.6"
+    "recharts": "^2.10.3"
   },
   "devDependencies": {
     "@types/react": "^18.2.43",

@@ -104,8 +104,20 @@ def delete_inventory(
     if not db_inventory:
         raise HTTPException(status_code=404, detail="Inventory record not found")
     
+    product_id = db_inventory.product_id
+    
     db.delete(db_inventory)
     db.commit()
+
+    # Check if this was the last inventory record for this product
+    remaining = db.query(models.Inventory).filter(models.Inventory.product_id == product_id).count()
+    if remaining == 0:
+        # Delete orphan product and related forecasts/sales
+        db.query(models.Forecast).filter(models.Forecast.product_id == product_id).delete()
+        db.query(models.SalesData).filter(models.SalesData.product_id == product_id).delete()
+        db.query(models.Product).filter(models.Product.id == product_id).delete()
+        db.commit()
+
     return {"message": "Inventory record deleted successfully"}
 
 @router.get("/low-stock/", response_model=List[schemas.InventoryResponse])

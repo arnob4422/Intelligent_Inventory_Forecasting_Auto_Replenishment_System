@@ -79,6 +79,38 @@ const InventoryModal = ({ isOpen, onClose, onSave, products, locations, editingI
                                     placeholder="Electronics"
                                     value={formData.category}
                                     onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                                    list="category-suggestions"
+                                />
+                                <datalist id="category-suggestions">
+                                    {[...new Set(products.map(p => p.category).filter(Boolean))].map(cat => (
+                                        <option key={cat} value={cat} />
+                                    ))}
+                                </datalist>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-1">Location</label>
+                                <select
+                                    required
+                                    className="input-field"
+                                    value={formData.location_id}
+                                    onChange={(e) => setFormData({ ...formData, location_id: parseInt(e.target.value) })}
+                                >
+                                    <option value="">Select Location</option>
+                                    {locations.map(loc => (
+                                        <option key={loc.id} value={loc.id}>{loc.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-semibold text-slate-700 mb-1">Initial Stock</label>
+                                <input
+                                    type="number"
+                                    required
+                                    min="0"
+                                    className="input-field"
+                                    placeholder="0"
+                                    value={formData.current_stock}
+                                    onChange={(e) => setFormData({ ...formData, current_stock: e.target.value === '' ? '' : parseInt(e.target.value) })}
                                 />
                             </div>
                         </>
@@ -92,7 +124,7 @@ const InventoryModal = ({ isOpen, onClose, onSave, products, locations, editingI
                                 required
                                 className="input-field"
                                 value={formData.current_stock}
-                                onChange={(e) => setFormData({ ...formData, current_stock: parseInt(e.target.value) })}
+                                onChange={(e) => setFormData({ ...formData, current_stock: e.target.value === '' ? '' : parseInt(e.target.value) })}
                             />
                         </div>
                     )}
@@ -151,19 +183,26 @@ const Inventory = () => {
             if (editingItem) {
                 // Update Inventory
                 await apiService.updateInventory(editingItem.id, {
-                    current_stock: data.current_stock,
+                    current_stock: (data.current_stock === '' || data.current_stock === null) ? 0 : data.current_stock,
                     reserved_stock: data.reserved_stock
                 });
             } else {
-                // Create Product
+                // Create Product first
+                // Create Product with initial stock for selected location
                 await apiService.createProduct({
                     sku: data.sku,
                     name: data.name,
-                    category: data.category,
+                    category: data.category || null,
                     lead_time_days: 7,
                     safety_stock_level: 50,
-                    unit_cost: 0
+                    unit_cost: 0,
+                    // New backend fields for auto-inventory creation
+                    initial_stock: (data.current_stock === '' || data.current_stock === null) ? 0 : parseInt(data.current_stock),
+                    location_id: parseInt(data.location_id)
                 });
+
+                // Backend now handles inventory creation with the correct initial stock.
+                // We just need to reload the data.
             }
             setIsModalOpen(false);
             loadData();

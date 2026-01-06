@@ -27,12 +27,6 @@ def generate_forecast(
     
     sales_records = query.order_by(models.SalesData.date.asc()).all()
     
-    if len(sales_records) < 10:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Insufficient sales data. Need at least 10 records, found {len(sales_records)}."
-        )
-    
     # 2. Convert to DataFrame for ML engine
     sales_df = pd.DataFrame([{
         'date': s.date,
@@ -45,8 +39,12 @@ def generate_forecast(
     try:
         # Train first
         train_result = engine.train(sales_df)
-        if "error" in train_result:
-            raise HTTPException(status_code=400, detail=train_result["error"])
+        if "error" in train_result or (train_result.get("status") == "error" and train_result.get("message") != "Insufficient data"):
+             # Use a generic message if "error" key is missing but status is error
+            detail = train_result.get("message", "Forecasting engine error")
+            raise HTTPException(status_code=400, detail=detail)
+        
+        # Note: If status is "cold_start", we proceed to predict() which now handles it.
             
         # Predict
         predictions = engine.predict(sales_df, days_ahead=request.days_ahead)

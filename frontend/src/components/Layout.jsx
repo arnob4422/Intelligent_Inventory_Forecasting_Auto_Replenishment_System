@@ -7,9 +7,13 @@ import {
     TrendingUp,
     AlertTriangle,
     ShoppingCart,
+    Store,
+    History,
     LogOut,
     Menu,
-    X
+    X,
+    Activity,
+    UploadCloud
 } from 'lucide-react';
 
 const Layout = () => {
@@ -21,6 +25,9 @@ const Layout = () => {
         { name: 'Dashboard', href: '/', icon: LayoutDashboard },
         { name: 'Inventory', href: '/inventory', icon: Package },
         { name: 'Forecasting', href: '/forecasting', icon: TrendingUp },
+        { name: 'Stores', href: '/stores', icon: Store },
+        { name: 'Records', href: '/footages', icon: History },
+        { name: 'Media Analysis', href: '/media-analysis', icon: UploadCloud },
         { name: 'Anomalies', href: '/anomalies', icon: AlertTriangle },
         { name: 'Recommendations', href: '/recommendations', icon: ShoppingCart },
     ];
@@ -56,8 +63,8 @@ const Layout = () => {
                                 key={item.name}
                                 to={item.href}
                                 className={`flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${isActive(item.href)
-                                        ? 'bg-primary-50 text-primary-700 font-semibold'
-                                        : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
+                                    ? 'bg-primary-50 text-primary-700 font-semibold'
+                                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
                                     }`}
                             >
                                 <item.icon className="w-5 h-5" />

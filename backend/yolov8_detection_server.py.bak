@@ -1,0 +1,370 @@
+"""
+YOLOv8 Real-Time Object Detection Server
+Integrated with Inventory System
+"""
+
+from fastapi import FastAPI, UploadFile, File
+from fastapi.middleware.cors import CORSMiddleware
+from ultralytics import YOLO
+import uvicorn
+import io
+from PIL import Image
+import numpy as np
+import cv2
+from database import SessionLocal
+import models
+
+app = FastAPI()
+
+# Session-based tracking to avoid duplicate counting
+# Mapping: tracking_id -> product_name
+seen_tracking_ids = set()
+
+# Enable CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Load model
+print("\n" + "="*60)
+print("🚀 Loading YOLOv8 Model...")
+print("="*60)
+
+try:
+    model = YOLO('yolov8n.pt')  # Downloads automatically if not present
+    print(f"✅ Model loaded successfully!")
+    print(f"📦 Available classes: {len(model.names)}")
+    print(f"🏷️  Sample classes: {', '.join(list(model.names.values())[:10])}...")
+except Exception as e:
+    print(f"❌ Error loading model: {e}")
+    model = None
+
+# AI Label mappings for inventory (Clean Human-Readable Names)
+LABEL_MAPPINGS = {
+    # Office Equipment
+    "laptop": "Enterprise Laptop",
+    "keyboard": "Mechanical Keyboard",
+    "mouse": "Wireless Mouse",
+    "cell phone": "Mobile Device",
+    "tv": "Display",
+    "air conditioner": "AC",
+    "monitor": "Display",
+    
+    # Computing Devices
+    "monitor": "Monitor",
+    "computer": "Mini PC",
+    
+    # Appliances & Climate Control
+    "air conditioner": "AC",
+    "ac": "AC",
+    "sink": "Sink",
+    "microwave": "Microwave",
+    "refrigerator": "Refrigerator",
+    "oven": "Oven",
+    "toaster": "Toaster",
+    "person": "Staff/Customer",
+    
+    # Containers & Storage
+    "bottle": "Water Bottle",
+    "cup": "Coffee Cup",
+    "handbag": "Packaged Box",
+    "suitcase": "AC",
+    "bucket": "Bucket",
+    
+    # Cleaning & Maintenance
+    "dustbin": "Dustbin",
+    "trash can": "Dustbin",
+    "aerosol": "Aerosol Spray",
+    "spray bottle": "Air Freshener",
+    
+    # Documentation & Personal Care
+    "book": "Inventory Book",
+    "vase": "Vaseline",
+    "clock": "Clock",
+    "chair": "Office Chair",
+    "dining table": "Office Desk",
+    "Mini pc": "Mini PC"
+    
+}
+
+# Strict categories for Inventory (ENTERPRISE RULE 1)
+ALLOWED_CATEGORIES = [
+    # Office Equipment
+    "bottle", "laptop", "keyboard", "mouse", "cell phone", "cup", "book", 
+    "handbag", "suitcase", "tv", "vase", "clock", "toilet", "cat", "dog",
+    "chair", "dining table", "airplane",
+    
+    # Computing Devices
+    "monitor", "computer",
+    
+    # Appliances & Climate Control
+    "air conditioner", "ac", "sink", "microwave", "refrigerator", "oven", "toaster", "person",
+    
+    # Containers & Storage
+    "bucket",
+    
+    # Cleaning & Maintenance
+    "dustbin", "trash can", "aerosol", "spray bottle"
+]
+
+# Excluded categories (ENTERPRISE RULES 2 & 3)
+EXCLUDED_CATEGORIES = [
+    "couch", "bed", 
+    "wall", "ceiling", "shelf", "showcase", "background", "furniture"
+]
+
+@app.get("/")
+def root():
+    return {
+        "status": "✅ Running",
+        "mode": "Enterprise Inventory AI",
+        "model": "YOLOv8n",
+        "tracking": "Enabled",
+        "model_loaded": model is not None,
+        "classes": list(model.names.values()) if model else []
+    }
+
+@app.post("/api/reset-session")
+def reset_session():
+    """Reset the tracking IDs for a new session"""
+    global seen_tracking_ids
+    seen_tracking_ids = set()
+    return {"status": "success", "message": "Tracking session reset"}
+
+@app.get("/api/health")
+def health():
+    return {
+        "status": "healthy",
+        "model_loaded": model is not None
+    }
+
+@app.post("/api/detect/realtime")
+async def detect_realtime(file: UploadFile = File(...), confidence: float = 0.30):
+    """
+    Detect objects in uploaded image with inventory integration
+    """
+    if model is None:
+        return {
+            "success": False,
+            "detections": [],
+            "count": 0,
+            "error": "Model not loaded"
+        }
+    
+    try:
+        # Read and process image
+        contents = await file.read()
+        image = Image.open(io.BytesIO(contents))
+        image_np = np.array(image)
+        
+        print(f"\n📸 Processing image: {image.size}")
+        
+        # Run tracking (Enterprise Mode)
+        # Using persist=True ensures IDs stay consistent across frames
+        results = model.track(image_np, conf=confidence, persist=True, verbose=False)
+        
+        # Extract detections
+        detections = []
+        db = SessionLocal()
+        
+        try:
+            for result in results:
+                boxes = result.boxes
+                if boxes is not None and len(boxes) > 0:
+                    # 🔍 Step 1: Context Pre-scan (Identify if we are at a desk)
+                    has_desk_context = False
+                    for box in boxes:
+                        class_name = model.names[int(box.cls[0])].lower()
+                        if class_name in ["keyboard", "mouse", "laptop", "mouse"]:
+                            has_desk_context = True
+                            break
+                    
+                    if has_desk_context:
+                        print("🪑 Desk context detected - applying strict AC filtering")
+
+                    for box in boxes:
+                        # Extract basic info
+                        conf = float(box.conf[0])
+                        
+                        # Use the requested confidence threshold (default 0.3)
+                        if conf < confidence:
+                            continue
+                            
+                        class_id = int(box.cls[0])
+                        class_name = model.names[class_id].lower()
+                        
+                        # Tracking ID (ENTERPRISE RULE 6)
+                        tracking_id = int(box.id[0]) if box.id is not None else None
+                        
+                        # 🛑 Strict Filtering (ENTERPRISE RULES 1, 2, 3, 7)
+                        if class_name in EXCLUDED_CATEGORIES:
+                            print(f"  [BLOCKED] Excluded Category: {class_name}")
+                            continue
+                        
+                        if class_name not in ALLOWED_CATEGORIES:
+                            print(f"  [BLOCKED] Non-Inventory Category: {class_name}")
+                            continue
+                            
+                        # Map to inventory product
+                        product_name = LABEL_MAPPINGS.get(class_name, class_name.title())
+                        bbox = box.xyxy[0].tolist()
+                        
+                        # 🧠 Smart Mapping: Context-aware product identification
+                        bbox = box.xyxy[0].tolist()
+                        width = bbox[2] - bbox[0]
+                        height = bbox[3] - bbox[1]
+                        aspect_ratio = width / height if height > 0 else 1
+                        y_center = (bbox[1] + bbox[3]) / (2 * image.height)
+                        
+                        # 1. Fluorescent Light Detection (Ceiling, very wide)
+                        if class_name in ["tv", "microwave"] and y_center < 0.25 and aspect_ratio > 4.5:
+                            product_name = "Fluorescent Light"
+                            print(f"  [SMART] Wide ceiling object mapped to Fluorescent Light")
+                            
+                        # 2. CC Camera Detection (Ceiling/High wall, small)
+                        elif class_name in ["remote", "cell phone", "clock", "toilet"] and y_center < 0.4 and (width * height) < (image.width * image.height * 0.05):
+                            product_name = "CC Camera"
+                            print(f"  [SMART] Small high object mapped to CC Camera")
+                            
+                        # 3. AC Detection (High up, rectangular but not as wide as light)
+                        # We use y1 (top edge) and y_center to ensure it's truly wall-mounted
+                        y1_rel = bbox[1] / image.height
+                        
+                        # Rules for AC identification:
+                        # - Normal room: y1 < 0.2 AND yc < 0.35
+                        # - Desk environment: y1 < 0.1 AND yc < 0.25 (Must be very close to ceiling)
+                        ac_y1_limit = 0.1 if has_desk_context else 0.2
+                        ac_yc_limit = 0.25 if has_desk_context else 0.35
+                        
+                        if y1_rel < ac_y1_limit and y_center < ac_yc_limit and class_name in ["tv", "microwave", "refrigerator", "oven", "suitcase", "bed"]:
+                            product_name = "AC"
+                            print(f"  [SMART] High-position {class_name} mapped to AC (y1={y1_rel:.2f}, yc={y_center:.2f}, context={'Desk' if has_desk_context else 'Default'})")
+                            
+                        # 4. Monitor/Display (Usually lower down)
+                        elif class_name == "tv":
+                            product_name = "Display"
+                            print(f"  [SMART] Monitor identified as Display (y1={y1_rel:.2f}, yc={y_center:.2f})")
+                            
+                        # 5. Mini PC Context (Special case for misclassified boxes)
+                        elif class_name == "laptop" and aspect_ratio > 2.0 and height < (image.height * 0.3):
+                            product_name = "Mini PC"
+                            print(f"  [SMART] Flat laptop-like object mapped to Mini PC")
+                        
+                        # 🎯 Unique Counting Logic (Enterprise Rule 5 & 6)
+                        is_new_count = False
+                        if tracking_id is not None:
+                            if tracking_id not in seen_tracking_ids:
+                                seen_tracking_ids.add(tracking_id)
+                                is_new_count = True
+                        else:
+                            # Fallback if tracker misses ID (rare)
+                            is_new_count = False 
+                        
+                        
+                        # Check if product exists in DB
+                        product = db.query(models.Product).filter(
+                            models.Product.name == product_name
+                        ).first()
+                        
+                        detection = {
+                            "tracking_id": tracking_id,
+                            "class_id": class_id,
+                            "class_name": class_name,
+                            "product_name": product_name,
+                            "product_exists": product is not None,
+                            "product_id": product.id if product else None,
+                            "confidence": round(conf, 3),
+                            "is_new_inventory": is_new_count,
+                            "bbox": {
+                                "x1": int(bbox[0]),
+                                "y1": int(bbox[1]),
+                                "x2": int(bbox[2]),
+                                "y2": int(bbox[3])
+                            }
+                        }
+                        detections.append(detection)
+                        
+                        status = "🆕 NEW ITEM" if is_new_count else "🔁 TRACKING"
+                        print(f"  [{tracking_id}] {status}: {class_name} ({conf*100:.1f}%)")
+        finally:
+            db.close()
+        
+        print(f"🎯 Total in frame: {len(detections)}")
+        
+        return {
+            "success": True,
+            "detections": detections,
+            "count": len(detections),
+            "new_items": sum(1 for d in detections if d.get('is_new_inventory')),
+            "image_size": {"width": image.width, "height": image.height}
+        }
+        
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        return {
+            "success": False,
+            "detections": [],
+            "count": 0,
+            "error": str(e)
+        }
+
+@app.get("/api/test/webcam")
+def test_webcam():
+    """
+    Test if webcam can be accessed
+    """
+    try:
+        cap = cv2.VideoCapture(0)
+        
+        if not cap.isOpened():
+            return {"status": "error", "message": "Cannot open webcam"}
+        
+        ret, frame = cap.read()
+        cap.release()
+        
+        if not ret:
+            return {"status": "error", "message": "Cannot read from webcam"}
+        
+        # Try detection on webcam frame
+        results = model(frame, conf=0.30, verbose=False)
+        detections = []
+        
+        for result in results:
+            boxes = result.boxes
+            if boxes is not None:
+                for box in boxes:
+                    class_name = model.names[int(box.cls[0])]
+                    detections.append({
+                        "class": class_name,
+                        "product_name": LABEL_MAPPINGS.get(class_name, class_name.title()),
+                        "confidence": float(box.conf[0])
+                    })
+        
+        return {
+            "status": "success",
+            "webcam_working": True,
+            "frame_size": frame.shape[:2],
+            "detections": detections,
+            "count": len(detections)
+        }
+        
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": str(e)
+        }
+
+if __name__ == "__main__":
+    print("\n" + "="*60)
+    print("🎯 YOLOv8 Real-Time Detection Server")
+    print("="*60)
+    print("📍 Server: http://localhost:8001")
+    print("📖 Docs: http://localhost:8001/docs")
+    print("🔗 Main Backend: http://localhost:8000")
+    print("="*60 + "\n")
+    
+    uvicorn.run(app, host="0.0.0.0", port=8001, log_level="info")

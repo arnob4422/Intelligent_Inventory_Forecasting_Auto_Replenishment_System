@@ -1,0 +1,14 @@
+classes = ['-', '6973077693007', '7up', 'AirSoft', 'Ambassadeur', 'Arruapan', 'Atlantico', 'Auzia', 'BFree', 'Basilico', 'Bimo', 'Bingo', 'Bisowik', 'Bladi', 'Bona', 'Bonal', 'Bref', 'Brossevvc', 'Bueno', 'Cacakuetes', 'Caramello', 'Casa mar', 'Celia', 'Chiuaua', 'Clorant', 'Conbebe', 'Condia', 'Confi Africats', 'Cotex', 'Cremy', 'Cristal', 'Crunchy', 'Daddy', 'Dahlia', 'Datte', 'Dorex', 'Douceline', 'Dziriya', 'Eden', 'Elhana', 'Elhara', 'Excellence', 'FH', 'Fibrax', 'Flan', 'Force Xpress', 'Gatoya', 'Gloria', 'Go Snack', 'Goldex', 'Grains de sesame', 'Guigoz', 'Harissa', 'Hopla', 'Hrousse', 'Indigo', 'JE Reste', 'Jumbo', 'Kenz', 'La Caille', 'Label', 'Labelle', 'Lavande', 'LaveSole', 'Lebleb', 'Lebled', 'Lebled-', 'Liya', 'Maestro', 'Maitre', 'Mariciana', 'Milina', 'Molino', 'Mystic Garden', 'Nada', 'Nedex', 'Nescafe', 'Nesquik', 'Nestle', 'Net GO', 'Nouara', 'Nuance', 'OBRIO', 'Oceana', 'Papilion', 'Parex', 'Polish', 'Polystar', 'Prince', 'Prosafe', 'Ricamar', 'SOS', 'Sandvich', 'Sanino', 'Saveurs du Monde', 'Sosemie', 'StarSols', 'Tartiner', 'Tassilo', 'Twisco', 'Twist', 'VIVA', 'Wafa', 'Zahouani', 'afia', 'aigle', 'amir', 'amour', 'awane', 'berbere', 'bombom', 'bonal', 'bref', 'brilex', 'burger', 'celia', 'chapelure', 'cherchell', 'chocapic', 'coca cola', 'cocacola', 'condia', 'cotex', 'ela', 'elgorriaga', 'elitta', 'extra', 'fanta', 'force xpress', 'frottoire', 'froutoire', 'gloria', 'hmis', 'ifruit', 'jumbo', 'kidy', 'le chef', 'le panier', 'life', 'life javel', 'nestle', 'nouara', 'olive', 'pitbull', 'recamar', 'ricamar', 'selecto', 'sofia', 'sprite', 'tango', 'thon', 'top yumy', 'wafa']
+
+mapping_items = []
+allowed_items = []
+
+for cls in classes:
+    if cls == '-' or not cls: continue
+    mapping_items.append(f'    "{cls}": "{cls.title()}",')
+    allowed_items.append(f'    "{cls}",')
+
+print("\n--- MAPPINGS ---")
+print("\n".join(mapping_items))
+print("\n--- ALLOWED ---")
+print("\n".join(allowed_items))
